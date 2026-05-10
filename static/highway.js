@@ -2239,7 +2239,16 @@ function createHighway() {
                                 window.slopsmith.emit('song:loaded', window.slopsmith.currentSong);
                             }
                             break;
-                        case 'beats': beats = msg.data; break;
+                        case 'beats':
+                            beats = msg.data;
+                            // Notify plugins that beats are now available so
+                            // they don't have to poll highway.getBeats() in a
+                            // setInterval to know when the WS finished
+                            // streaming the beats array.
+                            if (window.slopsmith) {
+                                window.slopsmith.emit('beats:loaded', { count: beats.length });
+                            }
+                            break;
                         case 'sections': sections = msg.data; break;
                         case 'anchors':
                             anchors = msg.data;
