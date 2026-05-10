@@ -2838,6 +2838,21 @@
                 } catch (e) {
                     _visibilityHandler = null;
                 }
+                // Sync once at bind time: the event is transition-only,
+                // so if the canvas was already hidden when we mounted
+                // (e.g. plugin loaded while splitscreen was active),
+                // we'd never receive an emit and would leave the wrap
+                // visible. Compute from the local highwayCanvas (not
+                // window.highway.isVisible) so splitscreen panels get
+                // their own per-instance answer instead of inheriting
+                // the main highway's state.
+                if (_visibilityHandler) {
+                    try {
+                        const initialVisible = highwayCanvas
+                            && highwayCanvas.offsetParent !== null;
+                        wrap.style.display = initialVisible ? '' : 'none';
+                    } catch (e) { /* ignore — initial sync is best-effort */ }
+                }
             }
 
             ren = new T.WebGLRenderer({ antialias: true });

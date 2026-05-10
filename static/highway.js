@@ -527,6 +527,12 @@ function createHighway() {
         try { api.resize(); }
         catch (e) { console.error('resize after canvas replace:', e); }
         _currentCanvasContextType = newType;
+        // The visibility cache is per-canvas-instance: a freshly
+        // attached canvas could be in a different displayed state
+        // than the one it replaced, and _lastVisible would otherwise
+        // suppress the first transition. Reset to null so the next
+        // rAF tick re-emits unconditionally.
+        _lastVisible = null;
         // Defensive notify for plugins / overlays that cache the
         // canvas element across events. Lazy lookups via
         // getElementById('highway') do not need this — they'll pick
@@ -2490,6 +2496,14 @@ function createHighway() {
         setVisible(v) {
             _visibleOverride = (v === null || v === undefined) ? null : !!v;
             _emitVisibilityIfChanged();
+        },
+        // Snapshot of the current visibility state (the override if
+        // set, else the live DOM check). Renderers that bind to
+        // `highway:visibility` after a transition has already happened
+        // can call this once to sync their initial state — the event
+        // is transition-only and won't re-fire for late subscribers.
+        isVisible() {
+            return _isHighwayVisible();
         },
         getNotes() { return notes; },
         getChords() { return chords; },

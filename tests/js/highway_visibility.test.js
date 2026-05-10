@@ -8,8 +8,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const HIGHWAY_JS = path.join(__dirname, '..', '..', 'static', 'highway.js');
-const HIGHWAY_3D_JS = path.join(__dirname, '..', '..', 'plugins', 'highway_3d', 'screen.js');
+const highwayJs = path.join(__dirname, '..', '..', 'static', 'highway.js');
+const highway3dJs = path.join(__dirname, '..', '..', 'plugins', 'highway_3d', 'screen.js');
 
 // Brace-balanced extraction so a future method that grows guards or
 // nested blocks doesn't get truncated by a naive `[^}]*\}` regex.
@@ -31,20 +31,20 @@ function extractBlock(src, signature) {
 }
 
 test('highway declares visibility state (_visibleOverride + _lastVisible)', () => {
-    const src = fs.readFileSync(HIGHWAY_JS, 'utf8');
+    const src = fs.readFileSync(highwayJs, 'utf8');
     assert.match(src, /let\s+_visibleOverride\s*=\s*null/, 'missing _visibleOverride (override sentinel)');
     assert.match(src, /let\s+_lastVisible\s*=\s*null/, 'missing _lastVisible (last-emitted state)');
 });
 
 test('_isHighwayVisible respects _visibleOverride and falls back to offsetParent', () => {
-    const src = fs.readFileSync(HIGHWAY_JS, 'utf8');
+    const src = fs.readFileSync(highwayJs, 'utf8');
     const fn = extractBlock(src, 'function _isHighwayVisible()');
     assert.match(fn, /_visibleOverride\s*!==\s*null/, 'must check the override before the DOM');
     assert.match(fn, /canvas\.offsetParent\s*!==\s*null/, 'DOM fallback must use offsetParent !== null');
 });
 
 test('_emitVisibilityIfChanged is transition-only (no per-frame spam)', () => {
-    const src = fs.readFileSync(HIGHWAY_JS, 'utf8');
+    const src = fs.readFileSync(highwayJs, 'utf8');
     const fn = extractBlock(src, 'function _emitVisibilityIfChanged()');
     // Must short-circuit when the current state equals the cached one.
     assert.match(fn, /v\s*===\s*_lastVisible/, 'must compare current vs _lastVisible and bail when equal');
@@ -58,7 +58,7 @@ test('_emitVisibilityIfChanged is transition-only (no per-frame spam)', () => {
 });
 
 test('rAF draw() loop calls _emitVisibilityIfChanged and skips when hidden', () => {
-    const src = fs.readFileSync(HIGHWAY_JS, 'utf8');
+    const src = fs.readFileSync(highwayJs, 'utf8');
     const fn = extractBlock(src, 'function draw()');
     assert.match(fn, /_emitVisibilityIfChanged\(\)/, 'rAF draw() must call _emitVisibilityIfChanged each tick');
     // Ordering: emit → skip-when-hidden → ready gate → renderer.draw.
@@ -74,8 +74,27 @@ test('rAF draw() loop calls _emitVisibilityIfChanged and skips when hidden', () 
     assert.ok(readyIdx < drawIdx, 'ready gate must run before renderer.draw');
 });
 
+test('api.isVisible() exposes a snapshot for late subscribers', () => {
+    // The event is transition-only, so renderers that bind after the
+    // initial frame need a way to sync. isVisible() returns the same
+    // value _isHighwayVisible() would return on the next tick.
+    const src = fs.readFileSync(highwayJs, 'utf8');
+    const fn = extractBlock(src, 'isVisible()');
+    assert.match(fn, /return\s+_isHighwayVisible\(\)/, 'isVisible() must return _isHighwayVisible()');
+});
+
+test('canvas-replace resets _lastVisible so the new canvas re-emits', () => {
+    // _lastVisible is per-canvas-lifecycle: a fresh canvas could
+    // be in a different displayed state than the one it replaced.
+    // Without the reset, _emitVisibilityIfChanged would suppress
+    // the first transition on the new canvas.
+    const src = fs.readFileSync(highwayJs, 'utf8');
+    const fn = extractBlock(src, 'function _replaceCanvas(newType)');
+    assert.match(fn, /_lastVisible\s*=\s*null/, '_replaceCanvas must reset _lastVisible so the new canvas re-emits');
+});
+
 test('api.setVisible accepts bool / null and re-emits inline', () => {
-    const src = fs.readFileSync(HIGHWAY_JS, 'utf8');
+    const src = fs.readFileSync(highwayJs, 'utf8');
     const fn = extractBlock(src, 'setVisible(v)');
     // null/undefined → clears the override
     assert.match(fn, /v\s*===\s*null\s*\|\|\s*v\s*===\s*undefined/, 'null/undefined must clear the override');
@@ -86,7 +105,7 @@ test('api.setVisible accepts bool / null and re-emits inline', () => {
 });
 
 test('3D Highway subscribes to highway:visibility and toggles wrap on hide', () => {
-    const src = fs.readFileSync(HIGHWAY_3D_JS, 'utf8');
+    const src = fs.readFileSync(highway3dJs, 'utf8');
     // Listener registration with the documented event name.
     assert.match(
         src,
@@ -112,5 +131,13 @@ test('3D Highway subscribes to highway:visibility and toggles wrap on hide', () 
         src,
         /window\.slopsmith\.off\(\s*['"]highway:visibility['"]/,
         '3D Highway must unbind highway:visibility on teardown',
+    );
+    // Initial-sync on bind so renderers that mount while the canvas
+    // is already hidden (e.g. plugin loaded mid-splitscreen) don't
+    // leave the wrap stuck in the wrong state.
+    assert.match(
+        src,
+        /highwayCanvas\.offsetParent\s*!==\s*null/,
+        '3D Highway must compute initial visibility from local highwayCanvas (splitscreen-safe)',
     );
 });
