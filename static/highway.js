@@ -36,10 +36,12 @@ function createHighway() {
     // (e.g. browser hasn't refreshed audio.currentTime yet) keep the
     // anchor's perfNow fixed so interpolation continues from the right
     // origin instead of stuttering.
-    let _chartAnchorAudioT = 0;
-    // NaN sentinel — `> 0` would have falsely treated perf=0 as "no prior
-    // anchor" in environments where performance.now() can return 0 (jsdom,
-    // unit test sandboxes); NaN is unambiguous.
+    // NaN sentinel for "no prior anchor" so the very first setTime call
+    // always triggers the re-anchor branch — even setTime(0) on the
+    // initial 60 Hz tick. Plain 0 would compare equal to setTime(0) and
+    // skip the branch, leaving _chartAnchorPerfNow uninitialized and
+    // causing getTime() to return NaN.
+    let _chartAnchorAudioT = NaN;
     let _chartAnchorPerfNow = NaN;
     // Pause detection: the 60Hz tick in app.js keeps calling setTime()
     // even while paused (with a stalled audio clock). Track when t last
@@ -2408,6 +2410,11 @@ function createHighway() {
         // so plugins don't see a clock drifting forward against silent
         // audio.
         getTime() {
+            // No anchor yet (called before the first setTime, e.g. during
+            // early boot before the 60 Hz tick has fired): just return
+            // chartTime. Without this guard, elapsedMs would be NaN and
+            // the rate-scaled return would propagate NaN to plugins.
+            if (Number.isNaN(_chartAnchorPerfNow)) return chartTime;
             const nowP = performance.now();
             // If t hasn't advanced for a while, audio is paused or the
             // tick has stopped — trust the raw chartTime.
@@ -2526,7 +2533,7 @@ function createHighway() {
             // Reset the anchor state so a fresh init/connect cycle
             // doesn't see stale advance timestamps from the previous
             // session, and reset the observed rate to the 1x default.
-            _chartAnchorAudioT = 0;
+            _chartAnchorAudioT = NaN;
             _chartAnchorPerfNow = NaN;
             _chartLastAdvanceAt = 0;
             _chartObservedRate = 1;

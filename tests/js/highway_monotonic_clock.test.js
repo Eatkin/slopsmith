@@ -37,9 +37,10 @@ function buildClockSandbox(perfNowImpl) {
         chartTime: 0,
         currentTime: 0,
         avOffsetSec: 0,
-        _chartAnchorAudioT: 0,
-        // Match production: NaN sentinel for "no prior anchor" so the
-        // first setTime call doesn't try to derive rate from nothing.
+        // Match production: NaN sentinels for "no prior anchor" so
+        // the first setTime call always re-anchors (even setTime(0))
+        // and so getTime() before any setTime returns chartTime.
+        _chartAnchorAudioT: NaN,
         _chartAnchorPerfNow: NaN,
         _chartLastAdvanceAt: 0,
         _chartObservedRate: 1,
@@ -61,9 +62,11 @@ function buildClockSandbox(perfNowImpl) {
 
 test('highway declares chart anchor + stall-detect + rate state', () => {
     const src = fs.readFileSync(HIGHWAY_JS, 'utf8');
-    assert.match(src, /let\s+_chartAnchorAudioT\s*=\s*0/, 'missing _chartAnchorAudioT');
-    // Initialized to NaN as a "no prior anchor" sentinel — `> 0` on
-    // perf=0 was ambiguous in jsdom/test contexts.
+    // Both anchor fields use NaN sentinels — _chartAnchorAudioT in
+    // particular MUST start as NaN, not 0, otherwise setTime(0) on the
+    // very first 60 Hz tick fails the `t !== _chartAnchorAudioT` check
+    // and never re-anchors, leaving the clock uninitialized.
+    assert.match(src, /let\s+_chartAnchorAudioT\s*=\s*NaN/, 'missing _chartAnchorAudioT (NaN sentinel)');
     assert.match(src, /let\s+_chartAnchorPerfNow\s*=\s*NaN/, 'missing _chartAnchorPerfNow (NaN sentinel)');
     assert.match(src, /let\s+_chartLastAdvanceAt\s*=\s*0/, 'missing _chartLastAdvanceAt (pause detection)');
     assert.match(src, /let\s+_chartObservedRate\s*=\s*1/, 'missing _chartObservedRate (playback rate awareness)');
@@ -130,7 +133,7 @@ test('api.stop() clears the chart anchor state so re-init starts fresh', () => {
     // The stop block runs until the next method declaration; grab a
     // generous slice and assert the anchor state resets.
     const stopBlock = src.slice(stopIdx, stopIdx + 1500);
-    assert.match(stopBlock, /_chartAnchorAudioT\s*=\s*0/, 'stop() must reset _chartAnchorAudioT');
+    assert.match(stopBlock, /_chartAnchorAudioT\s*=\s*NaN/, 'stop() must reset _chartAnchorAudioT to the NaN sentinel');
     assert.match(stopBlock, /_chartAnchorPerfNow\s*=\s*NaN/, 'stop() must reset _chartAnchorPerfNow to the NaN sentinel');
     assert.match(stopBlock, /_chartLastAdvanceAt\s*=\s*0/, 'stop() must reset _chartLastAdvanceAt');
     assert.match(stopBlock, /_chartObservedRate\s*=\s*1/, 'stop() must reset _chartObservedRate to 1x');
@@ -206,4 +209,48 @@ test('behavior: getTime caps interpolation at _CHART_MAX_INTERP_MS', () => {
     now = 200;
     const t = sb.getTime();
     assert.equal(t, 10.05, 'beyond cap must fall back to chartTime');
+});
+
+test('behavior: setTime(0) on first tick anchors correctly (boot edge case)', () => {
+    // Regression: _chartAnchorAudioT used to start at 0, so setTime(0)
+    // on the very first 60 Hz tick failed the `t !== _chartAnchorAudioT`
+    // check and skipped the re-anchor branch entirely. _chartAnchorPerfNow
+    // would stay NaN, and getTime would propagate NaN to plugins.
+    let now = 16; // realistic first-tick perf
+    const sb = buildClockSandbox(() => now);
+    sb.setTime(0);
+    // Anchor must now be initialized.
+    assert.equal(sb._chartAnchorAudioT, 0, 'setTime(0) on first tick must set anchor.audioT');
+    assert.equal(sb._chartAnchorPerfNow, 16, 'setTime(0) on first tick must set anchor.perfNow');
+    // getTime should return a finite value, not NaN.
+    const t = sb.getTime();
+    assert.ok(!Number.isNaN(t), `getTime must not return NaN after setTime(0); got ${t}`);
+});
+
+test('behavior: getTime before any setTime returns chartTime (no NaN)', () => {
+    // Regression: getTime called during early boot (before the first
+    // 60 Hz tick) used to compute `nowP - NaN` and propagate NaN. Must
+    // bail to chartTime when the anchor is still the NaN sentinel.
+    let now = 0;
+    const sb = buildClockSandbox(() => now);
+    const t = sb.getTime();
+    assert.equal(t, 0, 'getTime before any setTime must return chartTime, not NaN');
+    assert.ok(!Number.isNaN(t), 'getTime must not return NaN');
+});
+
+test('behavior: long anchor gap resets observed rate to 1x', () => {
+    // After a long gap (e.g. tab inactive, paused for a while), the
+    // next setTime() shouldn't carry forward the prior segment's
+    // observed rate — it likely reflects a different playback state.
+    let now = 0;
+    const sb = buildClockSandbox(() => now);
+    sb.setTime(10);
+    now = 50;
+    sb.setTime(10.025); // observed rate ≈ 0.5
+    assert.ok(Math.abs(sb._chartObservedRate - 0.5) < 0.001, 'first segment measured 0.5x');
+    // Long gap (1 second) before next setTime — out of the dPerf < 0.5
+    // window, so the rate must reset to 1.
+    now = 1100;
+    sb.setTime(10.5);
+    assert.equal(sb._chartObservedRate, 1, 'long anchor gap must reset rate to 1x');
 });
