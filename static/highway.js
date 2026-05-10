@@ -37,7 +37,10 @@ function createHighway() {
     // anchor's perfNow fixed so interpolation continues from the right
     // origin instead of stuttering.
     let _chartAnchorAudioT = 0;
-    let _chartAnchorPerfNow = 0;
+    // NaN sentinel — `> 0` would have falsely treated perf=0 as "no prior
+    // anchor" in environments where performance.now() can return 0 (jsdom,
+    // unit test sandboxes); NaN is unambiguous.
+    let _chartAnchorPerfNow = NaN;
     // Pause detection: the 60Hz tick in app.js keeps calling setTime()
     // even while paused (with a stalled audio clock). Track when t last
     // ADVANCED (not just when setTime was called) — if it's been still
@@ -2352,8 +2355,9 @@ function createHighway() {
                 // initial anchor (no prior segment) and on near-zero
                 // dt (would divide by ~0). Clamp to a sane window so
                 // a noisy seek doesn't poison the estimate.
-                const dPerf = (newPerfNow - _chartAnchorPerfNow) / 1000;
-                if (_chartAnchorPerfNow > 0 && dPerf > 0.001 && dPerf < 0.5) {
+                const hadPriorAnchor = !Number.isNaN(_chartAnchorPerfNow);
+                const dPerf = hadPriorAnchor ? (newPerfNow - _chartAnchorPerfNow) / 1000 : 0;
+                if (hadPriorAnchor && dPerf > 0.001 && dPerf < 0.5) {
                     const observed = (t - _chartAnchorAudioT) / dPerf;
                     if (observed > 0.05 && observed < 5) {
                         _chartObservedRate = observed;
@@ -2364,7 +2368,7 @@ function createHighway() {
                         // a stale estimate from the prior segment.
                         _chartObservedRate = 1;
                     }
-                } else if (_chartAnchorPerfNow > 0 && dPerf >= 0.5) {
+                } else if (hadPriorAnchor && dPerf >= 0.5) {
                     // Long gap between anchor updates — anchor was stale
                     // (paused, tab inactive, seek). Same reset.
                     _chartObservedRate = 1;
@@ -2523,7 +2527,7 @@ function createHighway() {
             // doesn't see stale advance timestamps from the previous
             // session, and reset the observed rate to the 1x default.
             _chartAnchorAudioT = 0;
-            _chartAnchorPerfNow = 0;
+            _chartAnchorPerfNow = NaN;
             _chartLastAdvanceAt = 0;
             _chartObservedRate = 1;
             // Release the renderer's GPU / DOM / event-listener resources
