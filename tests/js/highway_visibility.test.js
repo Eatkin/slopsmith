@@ -139,10 +139,28 @@ test('3D Highway subscribes to highway:visibility and toggles wrap on hide', () 
         /highwayCanvas\.offsetParent\s*!==\s*null/,
         'initScene must compute initial visibility from local highwayCanvas (splitscreen-safe)',
     );
-    // Teardown unbinds.
+    // Subscribes to highway:canvas-replaced so the identity gate
+    // (event.detail.canvas === highwayCanvas) survives core's
+    // context-type-driven canvas swap. Per CLAUDE.md plugin contract.
+    assert.match(
+        initSceneBlock,
+        /window\.slopsmith\.on\(\s*['"]highway:canvas-replaced['"]/,
+        'initScene must track canvas swaps so the visibility gate keeps matching',
+    );
+    assert.match(
+        initSceneBlock,
+        /highwayCanvas\s*=\s*e\.detail\.newCanvas/,
+        'canvas-replaced handler must update the local highwayCanvas reference',
+    );
+    // Teardown unbinds both listeners.
     assert.match(
         teardownBlock,
         /window\.slopsmith\.off\(\s*['"]highway:visibility['"]/,
         'teardown must unbind highway:visibility',
+    );
+    assert.match(
+        teardownBlock,
+        /window\.slopsmith\.off\(\s*['"]highway:canvas-replaced['"]/,
+        'teardown must unbind highway:canvas-replaced',
     );
 });

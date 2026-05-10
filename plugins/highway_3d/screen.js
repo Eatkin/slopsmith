@@ -1557,6 +1557,13 @@
         // hiding #highway leaves the WebGL scene painting full-screen.
         // Bound in initScene after wrap creation, unbound in destroy().
         let _visibilityHandler = null;
+        // highway:canvas-replaced listener — keeps highwayCanvas up to
+        // date across context-type swaps (e.g. swapping back to a 2D
+        // viz). The visibility handler's identity gate (event.detail.
+        // canvas === highwayCanvas) would otherwise stop matching
+        // after the swap; this listener follows the documented plugin
+        // contract from CLAUDE.md.
+        let _canvasReplacedHandler = null;
         let ambLight = null, dirLight = null;
         let fretG = null, tuningLblG = null, noteG = null, beatG = null, lblG = null;
         let gNote = null, gSus = null, gBeat = null, gTechArrow = null, gTapChevron = null;
@@ -2837,6 +2844,27 @@
                     window.slopsmith.on('highway:visibility', _visibilityHandler);
                 } catch (e) {
                     _visibilityHandler = null;
+                }
+                // Track canvas-replaced so the visibility handler's
+                // identity gate continues to match after core swaps the
+                // <canvas> element for a context-type change.
+                _canvasReplacedHandler = (e) => {
+                    if (!e || !e.detail) return;
+                    // Only update if the swap involves OUR canvas — in
+                    // splitscreen each panel has its own canvas.
+                    if (e.detail.oldCanvas !== highwayCanvas) return;
+                    highwayCanvas = e.detail.newCanvas;
+                    // Re-sync wrap visibility from the new canvas in
+                    // case its initial displayed-state differs.
+                    if (wrap) {
+                        const v = highwayCanvas && highwayCanvas.offsetParent !== null;
+                        wrap.style.display = v ? '' : 'none';
+                    }
+                };
+                try {
+                    window.slopsmith.on('highway:canvas-replaced', _canvasReplacedHandler);
+                } catch (e) {
+                    _canvasReplacedHandler = null;
                 }
                 // Sync once at bind time: the event is transition-only,
                 // so if the canvas was already hidden when we mounted
@@ -5829,9 +5857,13 @@
                 if (_visibilityHandler) {
                     try { window.slopsmith.off('highway:visibility', _visibilityHandler); } catch (e) {}
                 }
+                if (_canvasReplacedHandler) {
+                    try { window.slopsmith.off('highway:canvas-replaced', _canvasReplacedHandler); } catch (e) {}
+                }
             }
             _ndOnBusHit = _ndOnBusMiss = null;
             _visibilityHandler = null;
+            _canvasReplacedHandler = null;
             _ndHitMarks = [];
             _ndMissMarks = [];
             _ndLabels = [];
