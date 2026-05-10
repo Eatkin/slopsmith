@@ -2327,6 +2327,13 @@ function createHighway() {
 
         getBeats() { return beats; },
         getTime() { return chartTime; },
+        // Returns the slopsmith <audio> element so plugins don't have to
+        // reach for `document.getElementById('audio')` directly. In JUCE
+        // mode this is the empty audio element that the JUCE shim writes
+        // to (sets currentTime, calls play/pause through to jucePlayer);
+        // plugins that want the actual JUCE clock should use the
+        // song:play/song:seek/song:* events' enriched payload instead.
+        getAudioElement() { return document.getElementById('audio'); },
         getNotes() { return notes; },
         getChords() { return chords; },
         // Live reference to the chord-template lookup table —
