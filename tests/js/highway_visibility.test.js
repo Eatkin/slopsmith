@@ -106,38 +106,43 @@ test('api.setVisible accepts bool / null and re-emits inline', () => {
 
 test('3D Highway subscribes to highway:visibility and toggles wrap on hide', () => {
     const src = fs.readFileSync(highway3dJs, 'utf8');
-    // Listener registration with the documented event name.
+    // Scope to lifecycle blocks so unrelated / commented mentions
+    // elsewhere in screen.js can't cause false positives.
+    const initSceneBlock = extractBlock(src, 'function initScene()');
+    const teardownBlock = extractBlock(src, 'function teardown()');
+
+    // Listener registration with the documented event name (in init).
     assert.match(
-        src,
+        initSceneBlock,
         /window\.slopsmith\.on\(\s*['"]highway:visibility['"]/,
-        '3D Highway must subscribe to highway:visibility',
+        'initScene must subscribe to highway:visibility',
     );
     // Handler filters by canvas identity so splitscreen panels don't
     // hide each other's overlays — every instance receives every event
     // on the shared slopsmith bus, so this gate is essential.
     assert.match(
-        src,
+        initSceneBlock,
         /e\.detail\.canvas\s*!==\s*highwayCanvas/,
         'handler must filter on event.detail.canvas !== highwayCanvas (splitscreen-safe)',
     );
     // Handler toggles wrap.style.display based on visible === false.
     assert.match(
-        src,
+        initSceneBlock,
         /wrap\.style\.display\s*=\s*v\s*===\s*false\s*\?\s*['"]none['"]\s*:\s*['"]['"]/,
         'handler must hide the wrap when visible === false',
-    );
-    // Teardown unbinds.
-    assert.match(
-        src,
-        /window\.slopsmith\.off\(\s*['"]highway:visibility['"]/,
-        '3D Highway must unbind highway:visibility on teardown',
     );
     // Initial-sync on bind so renderers that mount while the canvas
     // is already hidden (e.g. plugin loaded mid-splitscreen) don't
     // leave the wrap stuck in the wrong state.
     assert.match(
-        src,
+        initSceneBlock,
         /highwayCanvas\.offsetParent\s*!==\s*null/,
-        '3D Highway must compute initial visibility from local highwayCanvas (splitscreen-safe)',
+        'initScene must compute initial visibility from local highwayCanvas (splitscreen-safe)',
+    );
+    // Teardown unbinds.
+    assert.match(
+        teardownBlock,
+        /window\.slopsmith\.off\(\s*['"]highway:visibility['"]/,
+        'teardown must unbind highway:visibility',
     );
 });
