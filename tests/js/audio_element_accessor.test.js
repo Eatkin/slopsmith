@@ -37,6 +37,7 @@ function extractMethodBody(src, signature) {
     const start = src.indexOf(signature);
     assert.ok(start !== -1, `signature '${signature}' not found`);
     const openBrace = src.indexOf('{', start);
+    assert.ok(openBrace !== -1, `opening brace after '${signature}' not found`);
     let depth = 1;
     let i = openBrace + 1;
     while (i < src.length && depth > 0) {
