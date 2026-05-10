@@ -63,16 +63,17 @@ test('beats:loaded emit is guarded against missing window.slopsmith', () => {
     );
 });
 
-test('beats:loaded guard verifies emit is callable', () => {
+test('beats:loaded guard verifies emit is callable (typeof check)', () => {
     // A partially-attached namespace (window.slopsmith exists but emit
     // isn't a function yet during early boot) would throw without this
-    // extra check. Accept either a typeof check or a direct truthiness
-    // check on .emit alongside the namespace test.
+    // extra check. A truthy check (`window.slopsmith.emit && ...`) lets
+    // non-callable values pass; require an explicit typeof === 'function'
+    // check so the guard catches that real edge.
     const src = fs.readFileSync(HIGHWAY_JS, 'utf8');
     const block = getCaseBlock(src, 'beats');
     assert.match(
         block,
-        /typeof\s+window\.slopsmith\.emit\s*===\s*['"]function['"]|window\.slopsmith\.emit\s*&&|&&\s*window\.slopsmith\.emit/,
-        'guard must verify emit is callable, not just that the namespace exists',
+        /typeof\s+window\.slopsmith\.emit\s*===\s*['"]function['"]/,
+        'guard must use typeof === \'function\' (not just truthy) to confirm emit is callable',
     );
 });
