@@ -62,3 +62,17 @@ test('beats:loaded emit is guarded against missing window.slopsmith', () => {
         'beats:loaded emit must be guarded against a missing window.slopsmith',
     );
 });
+
+test('beats:loaded guard verifies emit is callable', () => {
+    // A partially-attached namespace (window.slopsmith exists but emit
+    // isn't a function yet during early boot) would throw without this
+    // extra check. Accept either a typeof check or a direct truthiness
+    // check on .emit alongside the namespace test.
+    const src = fs.readFileSync(HIGHWAY_JS, 'utf8');
+    const block = getCaseBlock(src, 'beats');
+    assert.match(
+        block,
+        /typeof\s+window\.slopsmith\.emit\s*===\s*['"]function['"]|window\.slopsmith\.emit\s*&&|&&\s*window\.slopsmith\.emit/,
+        'guard must verify emit is callable, not just that the namespace exists',
+    );
+});
