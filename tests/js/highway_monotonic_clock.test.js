@@ -128,11 +128,10 @@ test('getTime falls back to chartTime when audio has stalled (paused)', () => {
 
 test('api.stop() clears the chart anchor state so re-init starts fresh', () => {
     const src = fs.readFileSync(HIGHWAY_JS, 'utf8');
-    const stopIdx = src.indexOf('stop() {');
-    assert.ok(stopIdx !== -1, 'api.stop() not found');
-    // The stop block runs until the next method declaration; grab a
-    // generous slice and assert the anchor state resets.
-    const stopBlock = src.slice(stopIdx, stopIdx + 1500);
+    // Use the brace-balanced extractor so the assertions are scoped to
+    // the actual stop() body — a fixed-size slice would falsely match
+    // resets that landed in an adjacent method.
+    const stopBlock = extractBlock(src, 'stop() {');
     assert.match(stopBlock, /_chartAnchorAudioT\s*=\s*NaN/, 'stop() must reset _chartAnchorAudioT to the NaN sentinel');
     assert.match(stopBlock, /_chartAnchorPerfNow\s*=\s*NaN/, 'stop() must reset _chartAnchorPerfNow to the NaN sentinel');
     assert.match(stopBlock, /_chartLastAdvanceAt\s*=\s*0/, 'stop() must reset _chartLastAdvanceAt');
