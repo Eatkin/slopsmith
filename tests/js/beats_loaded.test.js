@@ -14,23 +14,34 @@ const path = require('node:path');
 
 const HIGHWAY_JS = path.join(__dirname, '..', '..', 'static', 'highway.js');
 
+// Extract a single switch case body so assertions can match against just
+// that block rather than a fixed-length slice (more robust to harmless
+// edits adjacent to the case).
+function getCaseBlock(src, label) {
+    const start = src.indexOf(`case '${label}'`);
+    assert.ok(start !== -1, `case '${label}' not found in highway.js`);
+    const tail = src.slice(start);
+    const nextCase = tail.search(/\n\s*case\s+['"]/);
+    const nextDefault = tail.search(/\n\s*default\s*:/);
+    let end = tail.length;
+    if (nextCase > 0) end = Math.min(end, nextCase);
+    if (nextDefault > 0) end = Math.min(end, nextDefault);
+    return tail.slice(0, end);
+}
+
 test('beats:loaded emit is wired into the WS beats case', () => {
     // Source-level guard: catch a future contributor removing the emit
     // (regression) or replacing window.slopsmith.emit with something
     // else (intentional refactor — this test then needs updating).
     const src = fs.readFileSync(HIGHWAY_JS, 'utf8');
-    const idx = src.indexOf("case 'beats'");
-    assert.ok(idx !== -1, "case 'beats' not found in highway.js");
-
-    // Read a few hundred chars after the case label to capture the body.
-    const slice = src.slice(idx, idx + 500);
+    const block = getCaseBlock(src, 'beats');
     assert.match(
-        slice,
+        block,
         /window\.slopsmith\.emit\(\s*['"]beats:loaded['"]/,
         'beats case must emit beats:loaded',
     );
     assert.match(
-        slice,
+        block,
         /count:\s*beats\.length/,
         'beats:loaded payload must include count = beats.length',
     );
@@ -40,12 +51,14 @@ test('beats:loaded emit is guarded against missing window.slopsmith', () => {
     // The WS handler can fire before the slopsmith namespace is defined
     // (early in app boot). The emit must be guarded so a missing
     // namespace doesn't throw inside the WS message dispatcher.
+    // Looser pattern accepts any guard that reads window.slopsmith
+    // (including typeof checks and combined conditions) rather than
+    // mandating the exact `if (window.slopsmith)` form.
     const src = fs.readFileSync(HIGHWAY_JS, 'utf8');
-    const idx = src.indexOf("case 'beats'");
-    const slice = src.slice(idx, idx + 500);
+    const block = getCaseBlock(src, 'beats');
     assert.match(
-        slice,
-        /if\s*\(\s*window\.slopsmith\s*\)/,
-        'beats:loaded emit must be wrapped in `if (window.slopsmith)` guard',
+        block,
+        /if\s*\(\s*[^)]*window\.slopsmith\b[^)]*\)/,
+        'beats:loaded emit must be guarded against a missing window.slopsmith',
     );
 });
