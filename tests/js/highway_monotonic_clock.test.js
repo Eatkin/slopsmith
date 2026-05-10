@@ -1,6 +1,8 @@
 // Verify static/highway.js's getTime() interpolates smoothly via
 // performance.now() between setTime() calls (so plugins observe sub-
-// frame clock motion despite audio.currentTime's ~23 ms quantization).
+// frame clock motion despite audio.currentTime's coarse step
+// quantization — browsers refresh the reported value at ~20+ ms
+// granularity even though the underlying audio thread runs faster).
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');

@@ -29,9 +29,12 @@ function createHighway() {
     let avOffsetSec = 0;
     // Monotonic getTime support: between setTime() calls, getTime()
     // interpolates forward using performance.now() so plugins observe a
-    // smooth sub-frame clock instead of the ~23 ms quantization that
-    // audio.currentTime exposes (browser updates the audio clock every
-    // ~256 samples). The anchor only updates when setTime() receives a
+    // smooth sub-frame clock instead of the coarse step-quantization
+    // that audio.currentTime exposes (browsers don't refresh the
+    // reported value every audio frame — the practical gap between
+    // distinct readings is closer to 20+ ms in Chrome/Firefox even
+    // though the underlying audio thread runs much faster). The anchor
+    // only updates when setTime() receives a
     // genuinely new value — repeated calls with the same chartTime
     // (e.g. browser hasn't refreshed audio.currentTime yet) keep the
     // anchor's perfNow fixed so interpolation continues from the right
