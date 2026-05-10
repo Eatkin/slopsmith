@@ -30,13 +30,31 @@ test('highway.api object declares getAudioElement', () => {
     );
 });
 
+// Brace-balanced extraction so a future getAudioElement that grows
+// (guards, try/catch, nested object literals) doesn't get truncated by
+// a naive `[^}]*\}` regex.
+function extractMethodBody(src, signature) {
+    const start = src.indexOf(signature);
+    assert.ok(start !== -1, `signature '${signature}' not found`);
+    const openBrace = src.indexOf('{', start);
+    let depth = 1;
+    let i = openBrace + 1;
+    while (i < src.length && depth > 0) {
+        const ch = src[i];
+        if (ch === '{') depth++;
+        else if (ch === '}') depth--;
+        i++;
+    }
+    assert.ok(depth === 0, `unbalanced braces after '${signature}'`);
+    return src.slice(start, i);
+}
+
 test('getAudioElement returns the #audio element from document', () => {
     // Behavioral check: extract the getAudioElement method body and
     // exercise it against a fake document. Confirms it's calling
     // getElementById('audio') (not 'btn-play' or anything else).
     const src = fs.readFileSync(HIGHWAY_JS, 'utf8');
-    const m = src.match(/getAudioElement\s*\(\s*\)\s*\{[^}]*\}/);
-    assert.ok(m, 'getAudioElement method body not found');
+    const body = extractMethodBody(src, 'getAudioElement()');
 
     // Wrap it so we can call it standalone.
     const stub = { id: 'audio-stub' };
@@ -46,7 +64,7 @@ test('getAudioElement returns the #audio element from document', () => {
         },
     };
     vm.createContext(sandbox);
-    vm.runInContext(`globalThis.__getAudioElement = function ${m[0]};`, sandbox);
+    vm.runInContext(`globalThis.__getAudioElement = function ${body};`, sandbox);
 
     const result = sandbox.__getAudioElement();
     assert.equal(result, stub, 'getAudioElement must return getElementById("audio")');
