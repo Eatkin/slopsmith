@@ -27,6 +27,27 @@ function createHighway() {
     let chartTime = 0;
     let currentTime = 0;
     let avOffsetSec = 0;
+    // Monotonic getTime support: between setTime() calls, getTime()
+    // interpolates forward using performance.now() so plugins observe a
+    // smooth sub-frame clock instead of the ~23 ms quantization that
+    // audio.currentTime exposes (browser updates the audio clock every
+    // ~256 samples). The anchor only updates when setTime() receives a
+    // genuinely new value — repeated calls with the same chartTime
+    // (e.g. browser hasn't refreshed audio.currentTime yet) keep the
+    // anchor's perfNow fixed so interpolation continues from the right
+    // origin instead of stuttering.
+    let _chartAnchorAudioT = 0;
+    let _chartAnchorPerfNow = 0;
+    // Playing/paused gates the interpolation: when paused, getTime
+    // returns the raw chartTime so plugins don't see a clock that
+    // drifts forward against silent audio. Driven by song:play /
+    // song:pause / song:ended events (bound lazily — window.slopsmith
+    // may not exist when createHighway runs).
+    let _chartIsPlaying = false;
+    let _slopsmithBound = false;
+    // Cap the interpolation so a stalled main thread (long task, GC,
+    // dropped tick) can't make getTime drift far past reality.
+    const _CHART_MAX_INTERP_MS = 100;
     let animFrame = null;
     let _connectOpts = {};
     let _resizeContainer = null;
@@ -2303,7 +2324,33 @@ function createHighway() {
             };
         },
 
-        setTime(t) { chartTime = t; currentTime = t + avOffsetSec; },
+        setTime(t) {
+            // Lazy-bind to song:* events so we can gate interpolation on
+            // play/pause without requiring window.slopsmith to exist when
+            // createHighway() ran.
+            if (!_slopsmithBound) {
+                _slopsmithBound = true;
+                if (typeof window !== 'undefined' && window.slopsmith && typeof window.slopsmith.on === 'function') {
+                    window.slopsmith.on('song:play', () => {
+                        _chartIsPlaying = true;
+                        _chartAnchorAudioT = chartTime;
+                        _chartAnchorPerfNow = performance.now();
+                    });
+                    window.slopsmith.on('song:pause', () => { _chartIsPlaying = false; });
+                    window.slopsmith.on('song:ended', () => { _chartIsPlaying = false; });
+                }
+            }
+            chartTime = t;
+            currentTime = t + avOffsetSec;
+            // Only re-anchor on a genuinely new audio time. Repeated
+            // calls with the same `t` (audio.currentTime hasn't updated
+            // yet) keep the anchor's perfNow fixed so interpolation
+            // continues smoothly between audio updates.
+            if (t !== _chartAnchorAudioT) {
+                _chartAnchorAudioT = t;
+                _chartAnchorPerfNow = performance.now();
+            }
+        },
         setAvOffset(ms) { avOffsetSec = (Number(ms) || 0) / 1000; currentTime = chartTime + avOffsetSec; },
         getAvOffset() { return avOffsetSec * 1000; },
 
@@ -2326,7 +2373,20 @@ function createHighway() {
         },
 
         getBeats() { return beats; },
-        getTime() { return chartTime; },
+        // Returns the chart clock smoothed via performance.now()
+        // interpolation while playing — sub-frame accurate even though
+        // the underlying audio.currentTime updates only ~every 23 ms.
+        // While paused, returns the raw chartTime (no interpolation
+        // beyond what setTime last set).
+        getTime() {
+            if (!_chartIsPlaying) return chartTime;
+            const elapsedMs = performance.now() - _chartAnchorPerfNow;
+            // If the anchor is stale (long main-thread task, dropped
+            // tick), trust the latest chartTime rather than letting
+            // interpolation drift further.
+            if (elapsedMs > _CHART_MAX_INTERP_MS) return chartTime;
+            return _chartAnchorAudioT + elapsedMs / 1000;
+        },
         // Returns the slopsmith <audio> element so plugins don't have to
         // reach for `document.getElementById('audio')` directly. In JUCE
         // mode the same element is shimmed: `audio.currentTime` reads
