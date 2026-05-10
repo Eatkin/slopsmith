@@ -2244,8 +2244,10 @@ function createHighway() {
                             // Notify plugins that beats are now available so
                             // they don't have to poll highway.getBeats() in a
                             // setInterval to know when the WS finished
-                            // streaming the beats array.
-                            if (window.slopsmith) {
+                            // streaming the beats array. Verify .emit is
+                            // callable too — the namespace can be partially
+                            // attached during early boot.
+                            if (window.slopsmith && typeof window.slopsmith.emit === 'function') {
                                 window.slopsmith.emit('beats:loaded', { count: beats.length });
                             }
                             break;
