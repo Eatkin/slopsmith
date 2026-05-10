@@ -1551,6 +1551,12 @@
         // ── Per-instance Three.js state ───────────────────────────────────
         let scene = null, cam = null, ren = null;
         let wrap = null;
+        // highway:visibility listener (slopsmith#246). Hides the .h3d-wrap
+        // overlay when slopsmith's canvas is display:none'd (splitscreen
+        // case). Without this, the wrap is a *sibling* of #highway so
+        // hiding #highway leaves the WebGL scene painting full-screen.
+        // Bound in initScene after wrap creation, unbound in destroy().
+        let _visibilityHandler = null;
         let ambLight = null, dirLight = null;
         let fretG = null, tuningLblG = null, noteG = null, beatG = null, lblG = null;
         let gNote = null, gSus = null, gBeat = null, gTechArrow = null, gTapChevron = null;
@@ -2805,6 +2811,34 @@
                 el => el.removeAttribute('data-h3d-primary'));
             wrap.setAttribute('data-h3d-primary', '');
             highwayCanvas.parentNode.insertBefore(wrap, highwayCanvas.nextSibling);
+
+            // Subscribe to highway:visibility (slopsmith#246) so the
+            // .h3d-wrap overlay hides in sync with the slopsmith canvas.
+            // The wrap is a sibling of #highway, so display:none on
+            // #highway leaves us painting full-screen otherwise.
+            // Guarded lazy bind: tolerate hosts that don't yet expose
+            // slopsmith.on/off (older slopsmith versions, headless
+            // tests).
+            if (window.slopsmith
+                && typeof window.slopsmith.on === 'function'
+                && typeof window.slopsmith.off === 'function') {
+                _visibilityHandler = (e) => {
+                    if (!wrap) return;
+                    // Filter by canvas identity (splitscreen-safe).
+                    // Each createHighway() instance emits its own
+                    // visibility events on the shared slopsmith bus —
+                    // without this gate, one hidden panel would also
+                    // hide every other panel's 3D overlay.
+                    if (!e || !e.detail || e.detail.canvas !== highwayCanvas) return;
+                    const v = e.detail.visible;
+                    wrap.style.display = v === false ? 'none' : '';
+                };
+                try {
+                    window.slopsmith.on('highway:visibility', _visibilityHandler);
+                } catch (e) {
+                    _visibilityHandler = null;
+                }
+            }
 
             ren = new T.WebGLRenderer({ antialias: true });
             _probe = new T.Vector3();
@@ -5777,8 +5811,12 @@
             if (window.slopsmith && typeof window.slopsmith.off === 'function') {
                 if (_ndOnBusHit)  window.slopsmith.off('note:hit', _ndOnBusHit);
                 if (_ndOnBusMiss) window.slopsmith.off('note:miss', _ndOnBusMiss);
+                if (_visibilityHandler) {
+                    try { window.slopsmith.off('highway:visibility', _visibilityHandler); } catch (e) {}
+                }
             }
             _ndOnBusHit = _ndOnBusMiss = null;
+            _visibilityHandler = null;
             _ndHitMarks = [];
             _ndMissMarks = [];
             _ndLabels = [];
