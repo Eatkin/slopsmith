@@ -5404,9 +5404,14 @@ async function bootstrapPluginsAndUi() {
     // (empty, then populated by the plugin) the whole time. The wasted
     // library fetch below is negligible next to the whole-app + every-plugin
     // re-load a popup already does.
-    try {
-        if (new URLSearchParams(location.search).get('ssFollower') === '1') showScreen('player');
-    } catch (_) {}
+    let _isFollowerWindow = false;
+    try { _isFollowerWindow = new URLSearchParams(location.search).get('ssFollower') === '1'; } catch (_) {}
+    if (_isFollowerWindow) {
+        // Don't swallow showScreen failures silently — if `#player` ever went
+        // missing/renamed this guard would otherwise hide the flash regression.
+        try { showScreen('player'); }
+        catch (e) { console.warn('[slopsmith] follower-window: showScreen("player") failed:', e); }
+    }
     // Restore library-filter UI state from localStorage before the first
     // grid fetch so the badge/chips are accurate immediately
     // (slopsmith#129).
