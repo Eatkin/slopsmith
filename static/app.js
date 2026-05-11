@@ -5407,9 +5407,11 @@ async function bootstrapPluginsAndUi() {
     let _isFollowerWindow = false;
     try { _isFollowerWindow = new URLSearchParams(location.search).get('ssFollower') === '1'; } catch (_) {}
     if (_isFollowerWindow) {
-        // Don't swallow showScreen failures silently — if `#player` ever went
-        // missing/renamed this guard would otherwise hide the flash regression.
-        try { showScreen('player'); }
+        // Await it — showScreen is async, so a bare call would turn even a
+        // synchronous DOM error into an unhandled rejection that this try
+        // couldn't catch. Surface failures (e.g. `#player` missing/renamed)
+        // instead of silently bringing the library flash back.
+        try { await showScreen('player'); }
         catch (e) { console.warn('[slopsmith] follower-window: showScreen("player") failed:', e); }
     }
     // Restore library-filter UI state from localStorage before the first
