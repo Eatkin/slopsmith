@@ -5404,9 +5404,11 @@ async function bootstrapPluginsAndUi() {
     // (empty, then populated by the plugin) the whole time. The wasted
     // library fetch below is negligible next to the whole-app + every-plugin
     // re-load a popup already does.
-    let _isFollowerWindow = false;
-    try { _isFollowerWindow = new URLSearchParams(location.search).get('ssFollower') === '1'; } catch (_) {}
-    if (_isFollowerWindow) {
+    const isFollowerWindow = (() => {
+        try { return new URLSearchParams(location.search).get('ssFollower') === '1'; }
+        catch (_) { return false; }
+    })();
+    if (isFollowerWindow) {
         // Await it — showScreen is async, so a bare call would turn even a
         // synchronous DOM error into an unhandled rejection that this try
         // couldn't catch. Surface failures (e.g. `#player` missing/renamed)
