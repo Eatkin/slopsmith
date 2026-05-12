@@ -322,11 +322,15 @@ def _build_playback_schedule(
     def find_repeat_close(start: int) -> int | None:
         """Index of the first measure ≥ start whose ``repeatClose`` is set.
 
-        ``repeatClose`` is parsed as ``-1`` when absent and as the
-        "additional repetitions" count (``0`` = no repeat) otherwise.
+        pyguitarpro encodes ``repeatClose == -1`` for "no close marker" and
+        ``repeatClose == N`` (with ``N >= 0``) for a closing marker that
+        replays the bracket ``N`` additional times. We accept any non-
+        negative value as a close so a file authored with ``repeatClose
+        == 0`` (a "decorative" close that doesn't actually loop) doesn't
+        get mis-treated as an orphan open.
         """
         for j in range(start, len(headers)):
-            if headers[j].repeatClose > 0:
+            if headers[j].repeatClose >= 0:
                 return j
         return None
 

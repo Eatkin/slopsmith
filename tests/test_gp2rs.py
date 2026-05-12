@@ -321,7 +321,7 @@ def _make_header(
     """Build a mock MeasureHeader. ``start_quarters`` is in quarter-notes
     from the song start; converted to ticks internally."""
     return SimpleNamespace(
-        start=int(round(start_quarters * GP_TICKS_PER_QUARTER)),
+        start=round(start_quarters * GP_TICKS_PER_QUARTER),
         number=0,  # unused by schedule walker; converters set it from mh.number
         timeSignature=SimpleNamespace(
             numerator=numerator,
@@ -354,10 +354,10 @@ def test_schedule_no_repeats_no_directions():
 
 
 def test_schedule_simple_repeat():
-    # ||: A | B :||×2 → 4 entries: A0 B0 A1 B1
+    # ||: A | B :||x2 → 4 entries: A0 B0 A1 B1
     headers = [
         _make_header(0, is_repeat_open=True),   # A
-        _make_header(4, repeat_close=1),         # B (×2: 1 additional rep)
+        _make_header(4, repeat_close=1),         # B (x2: 1 additional rep)
     ]
     schedule = _build_playback_schedule(_make_song(headers), _TM_120)
     assert _ids(schedule) == [(0, 0), (1, 0), (0, 1), (1, 1)]
@@ -383,17 +383,17 @@ def test_schedule_with_volta():
 
 
 def test_schedule_sequential_groups():
-    # ||: A :||×2 | B | ||: C :||×3  → 2×A, B, 3×C
+    # ||: A :||x2 | B | ||: C :||x3  → 2xA, B, 3xC
     headers = [
-        _make_header(0, is_repeat_open=True, repeat_close=1),  # A (×2)
+        _make_header(0, is_repeat_open=True, repeat_close=1),  # A (x2)
         _make_header(4),                                          # B
-        _make_header(8, is_repeat_open=True, repeat_close=2),  # C (×3)
+        _make_header(8, is_repeat_open=True, repeat_close=2),  # C (x3)
     ]
     schedule = _build_playback_schedule(_make_song(headers), _TM_120)
     assert _ids(schedule) == [
-        (0, 0), (0, 1),       # 2×A
+        (0, 0), (0, 1),       # 2xA
         (1, 0),                # B
-        (2, 0), (2, 1), (2, 2),  # 3×C
+        (2, 0), (2, 1), (2, 2),  # 3xC
     ]
 
 
@@ -429,7 +429,7 @@ def test_schedule_dal_segno_al_coda():
 
 
 def test_schedule_da_capo_inside_repeat_block_fires_immediately():
-    # ||: A | B(D.C. al Fine) :||×2 | C(Fine) | D
+    # ||: A | B(D.C. al Fine) :||x2 | C(Fine) | D
     # A D.C. authored *inside* a repeat block must still fire the first time
     # we reach the measure carrying it — without the repeat completing the
     # remaining passes. This is the regression the inline repeat sub-loop
@@ -449,10 +449,10 @@ def test_schedule_da_capo_inside_repeat_block_fires_immediately():
 
 
 def test_schedule_da_capo_suppresses_inner_repeats():
-    # ||: A :||×2 | B(D.C.) → first pass plays the bracket (A A B), then D.C.
+    # ||: A :||x2 | B(D.C.) → first pass plays the bracket (A A B), then D.C.
     # jumps back to measure 0 and replays inner repeat *once* (A B).
     headers = [
-        _make_header(0, is_repeat_open=True, repeat_close=1),       # A (×2)
+        _make_header(0, is_repeat_open=True, repeat_close=1),       # A (x2)
         _make_header(4, from_direction_name="Da Capo"),              # B
     ]
     schedule = _build_playback_schedule(_make_song(headers), _TM_120)
@@ -517,7 +517,7 @@ def test_schedule_unresolved_dal_segno_warns():
 
 
 def test_schedule_note_time_shifts_under_repeat():
-    # ||: A :||×2 with 4/4 at 120 BPM → measure A is 2 s long. First-pass A
+    # ||: A :||x2 with 4/4 at 120 BPM → measure A is 2 s long. First-pass A
     # starts at 0 s; second-pass A starts at 2 s.
     headers = [_make_header(0, is_repeat_open=True, repeat_close=1)]
     schedule = _build_playback_schedule(_make_song(headers), _TM_120)
@@ -529,7 +529,7 @@ def test_schedule_note_time_shifts_under_repeat():
 
 
 def test_schedule_song_length_reflects_expansion():
-    # ||: A | B :||×2 → expanded length is 4 measures × 2 s = 8 s, not 4 s.
+    # ||: A | B :||x2 → expanded length is 4 measures x 2 s = 8 s, not 4 s.
     headers = [
         _make_header(0, is_repeat_open=True),
         _make_header(4, repeat_close=1),
@@ -553,7 +553,7 @@ def test_schedule_empty_song():
 
 
 def test_schedule_irregular_measure_lengths():
-    # A 3-quarter pickup followed by two 4-quarter measures, then ||: D :||×2.
+    # A 3-quarter pickup followed by two 4-quarter measures, then ||: D :||x2.
     # The pickup is intentionally shorter than its 4/4 time signature would
     # suggest — that's how GP encodes an anacrusis. The schedule must use the
     # tick delta to the next measure as the duration, not the time signature.
@@ -561,7 +561,7 @@ def test_schedule_irregular_measure_lengths():
         _make_header(0, numerator=4),   # A — 3 quarters long (starts at 0, next at 3)
         _make_header(3, numerator=4),   # B
         _make_header(7, numerator=4),   # C
-        _make_header(11, numerator=4, is_repeat_open=True, repeat_close=1),  # D ×2
+        _make_header(11, numerator=4, is_repeat_open=True, repeat_close=1),  # D x2
     ]
     schedule = _build_playback_schedule(_make_song(headers), _TM_120)
     # 120 BPM: 1 quarter = 0.5 s. Output starts:
