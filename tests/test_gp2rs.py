@@ -11,6 +11,7 @@ walker.
 """
 
 from types import SimpleNamespace
+from unittest import mock
 
 import pytest
 
@@ -471,30 +472,48 @@ def test_schedule_expand_disabled():
     assert _ids(schedule) == [(0, 0), (1, 0)]
 
 
-def test_schedule_orphan_open_warns(caplog):
+def _warning_messages(mock_log) -> list[str]:
+    """Format every `log.warning(fmt, *args)` call into its rendered message.
+
+    We patch the module-level logger rather than using pytest's caplog because
+    slopsmith's conftest installs a structlog processor chain that intercepts
+    logging records before caplog can see them — fine in production, but it
+    leaves caplog silent in CI even though the warning is emitted.
+    """
+    out = []
+    for call in mock_log.warning.call_args_list:
+        fmt, *args = call.args
+        try:
+            out.append(fmt % tuple(args))
+        except TypeError:
+            out.append(str(fmt))
+    return out
+
+
+def test_schedule_orphan_open_warns():
     # Open without matching close → log warning, walk linearly.
     headers = [
         _make_header(0, is_repeat_open=True),
         _make_header(4),
         _make_header(8),
     ]
-    with caplog.at_level("WARNING", logger="slopsmith.lib.gp2rs"):
+    with mock.patch("gp2rs.log") as mock_log:
         schedule = _build_playback_schedule(_make_song(headers), _TM_120)
     assert _ids(schedule) == [(0, 0), (1, 0), (2, 0)]
-    assert any("no matching close" in rec.message for rec in caplog.records)
+    assert any("no matching close" in m for m in _warning_messages(mock_log))
 
 
-def test_schedule_unresolved_dal_segno_warns(caplog):
+def test_schedule_unresolved_dal_segno_warns():
     # Da Segno with no Segno target → warn, advance linearly past the jump.
     headers = [
         _make_header(0),
         _make_header(4, from_direction_name="Da Segno"),
         _make_header(8),
     ]
-    with caplog.at_level("WARNING", logger="slopsmith.lib.gp2rs"):
+    with mock.patch("gp2rs.log") as mock_log:
         schedule = _build_playback_schedule(_make_song(headers), _TM_120)
     assert _ids(schedule) == [(0, 0), (1, 0), (2, 0)]
-    assert any("no matching target" in rec.message for rec in caplog.records)
+    assert any("no matching target" in m for m in _warning_messages(mock_log))
 
 
 def test_schedule_note_time_shifts_under_repeat():
