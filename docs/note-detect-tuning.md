@@ -112,10 +112,29 @@ Crucially: **don't trust the suggestion at low hit counts.** Hits at a far-off o
 - **All-matched `timing_error_ms.median` is *not* a calibration signal.** When A/V offset is wrong, the matcher matches the user's pluck against whatever chart note is closest in time, not the intended one. The resulting te median is pinned near a constant regardless of the offset value. Always use `timing_error_ms_hits.median` for calibration math.
 - **At a very wrong A/V offset, the auto-calibrate suggestion can point further wrong.** When few hits land, their te median is a property of which wrong chart notes happened to be reachable, not of the user's real skew. Start near zero or near a known reasonable value if you suspect the offset is far off.
 - **Sweeping parameter X won't fix a problem that lives outside X.** If pure misses dominate at the default config and stay pinned across a 4× range of frame sizes or pitch tolerances, the bottleneck is not those parameters — likely the detector algorithm, the chord scorer, or the matching window logic. Recognise the ceiling and pivot to code changes.
-- **The harness doesn't exercise the chord scorer faithfully.** Chord scoring in the browser uses `AnalyserNode.getFloatFrequencyData()`, which doesn't exist in Node — the harness's chord path silently produces near-zero hits regardless of `--chord-hit-ratio`. Compare against an in-app live diagnostic dump (Settings → Download Diagnostic JSON) to evaluate chord-scoring changes, not the harness alone. Single-note scoring is reliable in the harness.
+- **Match the recording's sample rate when scoring chords.** The chord scorer is fully self-contained (its own FFT, not `AnalyserNode`) and runs in the harness identically to the browser path. But the harness defaults to `--sample-rate 44100` while most modern USB interfaces capture at 48000 — passing the WAV at the wrong rate resamples it linearly, which smears the FFT bins enough to swing chord-hit counts by 1–2 per take. Cross-validated against one contributor's 48 kHz recording, harness at `--sample-rate 48000 --frame-size 2048` reproduces his live chord-hit count within ±1 (9/16 vs his 10/16). Single-note scoring is less sensitive to this and the default sample rate is usually fine.
 - **Bumping the latency-offset default doesn't generalise.** The right latency comp is heavily audio-chain-dependent (USB interface vs. on-board, ScriptProcessor buffering, OS audio path). A value that's perfect for one user over-corrects for another — bumping the default to match the best-tuned user we had data for regressed two of four fixtures. Leave latency at the conservative default and rely on the A/V auto-calibrate panel + the user-facing slider to dial it in per-chain.
 
 ## Recipes
+
+### Live judgment streaming — watching a session in flight
+
+When tuning mode is on, the plugin POSTs each judgment to `POST /api/plugins/note_detect/live-judgment` as it's produced. Backend appends one JSON line to `static/note_detect_recordings/live_<sessionId>.jsonl`. A fresh session id is minted on every `song:play`, so each take produces its own file paired with the recorded WAV (when arming) by timestamp.
+
+The file is human-readable and updates while the song plays. Tail it with `Get-Content -Wait` on Windows or `tail -f` on macOS/Linux:
+
+```
+{"t":5.333,"s":0,"f":0,"hit":true,"ts":"OK","te":12,"pe":3,"cnf":0.94}
+{"t":6.000,"s":1,"f":0,"hit":false,"ts":"EARLY","te":-180,"cnf":0.71}
+{"t":6.667,"s":2,"f":0,"hit":true,"ts":"OK","te":-20,"pe":8}
+```
+
+This is the lowest-friction way to share a session with a collaborator: they don't need to wait for the song to end, you don't need to upload anything — the file lives in the bind-mounted `static/` tree, so any host-side process can read it during play.
+
+Limitations:
+- Streaming is fire-and-forget; the POSTs don't block detection. A request failure is silently swallowed so the in-memory diagnostic stays the source of truth.
+- File cap is 8 MB per session (a 3-minute song produces ~60 KB, so this is 100× headroom). Beyond the cap the route returns 413 and the in-memory log keeps growing.
+- Disabled outside tuning mode — normal users pay no overhead.
 
 ### "Did my detector change improve things?" — the regression suite
 
