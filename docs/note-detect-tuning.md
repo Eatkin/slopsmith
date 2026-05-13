@@ -112,10 +112,35 @@ Crucially: **don't trust the suggestion at low hit counts.** Hits at a far-off o
 - **All-matched `timing_error_ms.median` is *not* a calibration signal.** When A/V offset is wrong, the matcher matches the user's pluck against whatever chart note is closest in time, not the intended one. The resulting te median is pinned near a constant regardless of the offset value. Always use `timing_error_ms_hits.median` for calibration math.
 - **At a very wrong A/V offset, the auto-calibrate suggestion can point further wrong.** When few hits land, their te median is a property of which wrong chart notes happened to be reachable, not of the user's real skew. Start near zero or near a known reasonable value if you suspect the offset is far off.
 - **Sweeping parameter X won't fix a problem that lives outside X.** If pure misses dominate at the default config and stay pinned across a 4× range of frame sizes or pitch tolerances, the bottleneck is not those parameters — likely the detector algorithm, the chord scorer, or the matching window logic. Recognise the ceiling and pivot to code changes.
+- **The harness doesn't exercise the chord scorer faithfully.** Chord scoring in the browser uses `AnalyserNode.getFloatFrequencyData()`, which doesn't exist in Node — the harness's chord path silently produces near-zero hits regardless of `--chord-hit-ratio`. Compare against an in-app live diagnostic dump (Settings → Download Diagnostic JSON) to evaluate chord-scoring changes, not the harness alone. Single-note scoring is reliable in the harness.
+- **Bumping the latency-offset default doesn't generalise.** The right latency comp is heavily audio-chain-dependent (USB interface vs. on-board, ScriptProcessor buffering, OS audio path). A value that's perfect for one user over-corrects for another — bumping the default to match the best-tuned user we had data for regressed two of four fixtures. Leave latency at the conservative default and rely on the A/V auto-calibrate panel + the user-facing slider to dial it in per-chain.
 
 ## Recipes
 
-### "Did my detector change improve things?"
+### "Did my detector change improve things?" — the regression suite
+
+For a single fixture, two ad-hoc harness runs work (see below). For real iteration where you want **all** your fixtures measured against a stored baseline, use the regression driver in the plugin:
+
+```bash
+cd plugins/note_detect
+
+# One-time: copy the example, edit paths to point at your recordings.
+cp tools/regression-fixtures.example.json tools/regression-fixtures.json
+
+# Capture a baseline (do this BEFORE making any code changes).
+npm run regression:update
+
+# ...make detector changes...
+
+# Re-measure against the baseline. Exit code 1 if any fixture regresses.
+npm run regression:vs-baseline
+```
+
+The driver iterates each fixture, runs `harness.js`, and prints a table of `hits/total · pure · chordPartial · Δhits-vs-baseline`. Both the fixtures file and the baseline are gitignored — they reference your local recordings, which aren't portable across contributors. Commit them in your fork if you want CI, otherwise treat them as local state.
+
+The same workflow works on any tuning change — A/V offset sweep, frame-size sweep, algorithm experiments. Just make sure the baseline was captured *before* the change you want to measure.
+
+### "Did my detector change improve things?" — ad hoc
 
 Same recording, same chart, two harness runs. Recipe assumes you're at the repo root; the harness lives in the note_detect plugin tree:
 
