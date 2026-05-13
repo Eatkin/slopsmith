@@ -147,9 +147,15 @@ def chord_note(s, f, sus=0.0, **flags):
 
 
 # ── Exercises ─────────────────────────────────────────────────────────
-# Each returns (notes, chords, templates_added, description). Exercise
-# start times are computed by the driver; helpers use `t0` as the
-# exercise's bar-aligned start time, then place events relative to it.
+# Each returns a 3-tuple `(notes, chords_or_with_templates, description)`.
+# The middle slot is overloaded so single-note exercises don't have to
+# carry a useless empty `templates` list:
+#   • Single-note exercises return `(notes, [], desc)` — second slot is
+#     just the (empty) chords list.
+#   • Chord exercises return `(notes, (chords, templates), desc)` — the
+#     driver unpacks the tuple when it sees one (see `build()`).
+# Exercise start times are computed by the driver; helpers use `t0` as
+# the exercise's bar-aligned start time, then place events relative to it.
 
 def exercise_open_strings(t0):
     """Single notes — open strings, low → high → low, quarter notes."""
@@ -191,9 +197,15 @@ def exercise_sustained(t0):
     requires the provider to keep returning state — exercises the
     on-pitch hold check (`_sustainStillHeld`)."""
     sus = 4.0
-    targets = [(0, 5), (2, 7), (3, 5), (5, 5)]    # spread across strings
+    # Three targets spread across the range (low / mid / high). Held at
+    # 3 to keep the whole exercise within the section's 16 s slot —
+    # 4 events with a 4-s sustain at a 5-s cadence would end at t0+19
+    # and bleed 3 s into the next section's note-detect window, which
+    # contaminates the bin attribution we promise section-by-section.
+    targets = [(0, 5), (2, 7), (5, 5)]
     notes = []
-    # One every 5 seconds (4-sec sustain + 1-sec gap).
+    # One every 5 seconds (4-sec sustain + 1-sec gap). 3 events × 5 s
+    # = 14 s of music, comfortably inside EXERCISE_BARS * BAR_S = 16 s.
     for i, (s, f) in enumerate(targets):
         notes.append(note(t0 + i * (sus + 1.0), s, f, sus=sus))
     return notes, [], 'Sustained notes (4 s each, on-pitch hold)'
@@ -203,9 +215,10 @@ def exercise_hammer_pull(t0):
     """Open → hammer-on → pull-off. Hammer-ons and pull-offs have no
     fresh pick attack, so transient detection is what's tested."""
     notes = []
-    # Pattern per bar: A (s5/f5 = D3) picked, HO to f7 (E3), PO back to f5
-    # (4 events spaced over 4 beats... but spec says the HO/PO flag goes
-    # on the destination note). Use 4 bars.
+    # Pattern per bar: D3 (s=1, f=5 — A-string fretted at 5) picked, HO
+    # to f=7 (E3), PO back to f=5 (D3). HO/PO flags ride the destination
+    # note, not the source — that's where the technique is performed.
+    # Use 4 bars.
     for bar in range(4):
         bt = t0 + bar * BAR_S
         notes.append(note(bt + 0 * SECONDS_PER_BEAT, 1, 5, sus=0.4))       # pluck D3
@@ -461,7 +474,24 @@ def build(out_dir: Path):
 
 
 def _build_zip(src_dir: Path):
-    """Pack `src_dir` into `<src_dir>.zip` with forward-slash paths."""
+    """Pack `src_dir` into `<src_dir>.zip` with forward-slash paths.
+
+    Zip-level reproducibility: every entry uses a fixed `date_time` (the
+    zip spec's earliest legal value, 1980-01-01 00:00:00), a fixed
+    `external_attr` (rw-r--r--), and an explicit `ZipInfo` so the
+    archive metadata depends only on contents, not on when the build
+    ran. JSON / YAML / MD entries are byte-identical across rebuilds.
+
+    Caveat: the bundled `stems/full.ogg` is still non-deterministic
+    across rebuilds because libvorbis writes a random bitstream serial
+    number to every Ogg page (~1% of the file's bytes are container
+    framing, not audio). The audio PCM that the detector listens to is
+    deterministic; only the container headers differ. So a diff of the
+    tracked sloppak will always show OGG churn after `_build_zip`, but
+    the chart, manifest, and audible signal are stable. If a future PR
+    needs full byte-stability, it can either cache a hand-built OGG or
+    switch the stem to FLAC.
+    """
     import zipfile
     zip_path = src_dir.with_suffix(src_dir.suffix + '.zip')
     if zip_path.exists():
@@ -472,7 +502,13 @@ def _build_zip(src_dir: Path):
                 # Force POSIX-style arcname so a Windows build still
                 # emits a Linux-loadable archive.
                 rel = p.relative_to(src_dir).as_posix()
-                zf.write(p, arcname=rel)
+                info = zipfile.ZipInfo(filename=rel, date_time=(1980, 1, 1, 0, 0, 0))
+                info.compress_type = zipfile.ZIP_DEFLATED
+                # rw-r--r-- in the upper 16 bits where ZIP stores
+                # external attrs on POSIX. Avoids "executable" / weird
+                # permission bits leaking from the host filesystem.
+                info.external_attr = (0o644 & 0xFFFF) << 16
+                zf.writestr(info, p.read_bytes())
 
 
 def _benchmark_readme(duration_s):

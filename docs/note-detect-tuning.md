@@ -28,7 +28,7 @@ The distributable sloppak ships in-tree at [docs/benchmarks/note_detect_v1/note_
 
 Every chart note has `sus > 0` — so anything you tune against this benchmark exercises the sustain path, not staccato detection. (If we add a staccato section later, the cleanest split is by section name; don't categorize by `sus` value on the event log — see the "Common pitfalls" section.)
 
-To rebuild after edits to the exercise list, follow the docstring at the top of `build_benchmark.py`. The script writes both a directory (`.sloppak/`) and a zip (`.sloppak.zip`); the player accepts either. After regenerating, copy the zip output to the tracked path with the `.sloppak` (not `.sloppak.zip`) suffix so it stays a drop-in install:
+To rebuild after edits to the exercise list, follow the docstring at the top of `build_benchmark.py`. The script writes both an unzipped directory (`.sloppak/`) and a zipped archive (`.sloppak.zip`). The slopsmith library scanner (`lib/sloppak.py::is_sloppak()`) matches on the `.sloppak` suffix, **not** on `.sloppak.zip` — the directory form is usable as-is, but the zip output needs its suffix swapped before it'll be discovered. After regenerating, copy the zip output to the tracked path with the `.sloppak` suffix so it stays a drop-in install:
 
 ```bash
 cp static/sloppak_cache/note_detect_benchmark_v1.sloppak.zip \
@@ -117,13 +117,14 @@ Crucially: **don't trust the suggestion at low hit counts.** Hits at a far-off o
 
 ### "Did my detector change improve things?"
 
-Same recording, same chart, two harness runs:
+Same recording, same chart, two harness runs. Recipe assumes you're at the repo root; the harness lives in the note_detect plugin tree:
 
 ```bash
+HARNESS=plugins/note_detect/tools/harness.js
 git stash
-node tools/harness.js --audio <wav> --chart <json> --out /tmp/before.json
+node $HARNESS --audio <wav> --chart <json> --out /tmp/before.json
 git stash pop
-node tools/harness.js --audio <wav> --chart <json> --out /tmp/after.json
+node $HARNESS --audio <wav> --chart <json> --out /tmp/after.json
 node -e "
 const fs = require('fs');
 for (const [n, p] of [['before','/tmp/before.json'],['after','/tmp/after.json']]) {
@@ -140,9 +141,10 @@ If `summary.hits` went up *and* no miss-bin went up by more than ~1, ship it. If
 Sweep:
 
 ```bash
+HARNESS=plugins/note_detect/tools/harness.js
 for AV in -100 -50 0 50 100 150 200; do
   echo "=== av=$AV ==="
-  node tools/harness.js --audio <wav> --chart <json> --av-offset-ms=$AV --out /tmp/sw_$AV.json | tail -1
+  node $HARNESS --audio <wav> --chart <json> --av-offset-ms=$AV --out /tmp/sw_$AV.json | tail -1
 done
 ```
 
