@@ -144,9 +144,10 @@ def chord_note(s, f, sus=0.0, **flags):
 
 # ── Exercises ─────────────────────────────────────────────────────────
 # Bass idioms: single notes dominate, occasional double-stops (root +
-# fifth or root + octave on adjacent strings), long sustains. Half-note
-# pacing throughout for the same "give the player time to land cleanly"
-# reasoning as guitar v2.
+# fifth on adjacent higher string two frets up, or root + octave two
+# strings + two frets up), long sustains. Half-note pacing throughout
+# for the same "give the player time to land cleanly" reasoning as
+# guitar v2.
 
 def exercise_open_strings_slow(t0):
     """All 4 open strings, low → high → low. Tests the lowest end of
@@ -233,9 +234,10 @@ def exercise_walking_line(t0):
 def exercise_root_fifth_pattern(t0):
     """Root + fifth alternation — single most common bass pattern in
     rock / country. Plays (root, fifth, root, fifth) on each of two
-    voicings. The fifth lives two strings up + same fret, no stretch."""
-    # Root on (0, 0) = E1, fifth = (1, 2) = B1
-    # Then root on (1, 0) = A1, fifth = (2, 2) = E2
+    voicings. The fifth sits on the next-higher string, 2 frets up
+    from the root — a one-finger reach with no string skip."""
+    # Root on (0, 0) = E1, fifth = (1, 2) = B1 (A string fret 2)
+    # Then root on (1, 0) = A1, fifth = (2, 2) = E2 (D string fret 2)
     pattern = [
         (0, 0), (1, 2), (0, 0), (1, 2),
         (1, 0), (2, 2), (1, 0), (2, 2),
@@ -345,7 +347,14 @@ def build(out_dir: Path):
 
     arrangement = {
         'name': 'Bass',
-        'tuning': [0] * N_STRINGS,
+        # Pad to 6 slots even on bass — slopsmith's `tuning_name()` only
+        # recognises named tunings (E Standard, Drop D, etc.) on 6-element
+        # arrays, so a 4-element array shows up in the library card as the
+        # raw numeric form ("0 0 0 0") instead of "E Standard". The
+        # arrangement name ("Bass") + note positions still drive the
+        # detector's bass-specific behaviour; this just makes the library
+        # display friendly.
+        'tuning': [0] * 6,
         'capo': 0,
         'notes': sorted(notes_all, key=lambda n: n['t']),
         'chords': sorted(chords_all, key=lambda c: c['t']),
@@ -367,7 +376,8 @@ def build(out_dir: Path):
                 'id': 'bass',
                 'name': 'Bass',
                 'file': 'arrangements/bass.json',
-                'tuning': [0] * N_STRINGS,
+                # Pad to 6 slots — see arrangement-level comment.
+                'tuning': [0] * 6,
                 'capo': 0,
             },
         ],
@@ -467,7 +477,7 @@ double-stops, and long low-E holds that stress YIN's accumulator at
 | A. Open strings (slow walk) | Mono detection on each open string, low → high → low |
 | B. 5th-fret (slow walk) | Fretted-note detection across the 4 strings |
 | C. Sustained notes | 3 × 4-second held roots |
-| D. Octave walks | Root ↔ octave alternation on adjacent strings |
+| D. Octave walks | Root ↔ octave alternation, 2 strings + 2 frets up |
 | E. Walking bassline | A minor pentatonic ascending + descending |
 | F. Root + fifth pattern | Classic rock bass pattern (8 events) |
 | G. Double-stops | 2-string voicings — the chord-scorer test for bass |

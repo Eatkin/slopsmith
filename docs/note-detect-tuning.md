@@ -161,13 +161,19 @@ The same workflow works on any tuning change — A/V offset sweep, frame-size sw
 
 ### "Did my detector change improve things?" — ad hoc
 
-Same recording, same chart, two harness runs. Recipe assumes you're at the repo root; the harness lives in the note_detect plugin tree:
+Same recording, same chart, two harness runs. Recipe assumes you're at the repo root; the harness lives in the note_detect plugin tree.
+
+The stash dance below uses **`git stash push -m "..."`** to give the stash a known name, and asserts a stash was actually created before popping. Without that, a worktree that happened to be clean would make `git stash` a no-op, and the later `git stash pop` would silently pop whatever was at the top of your stash list — easily an unrelated WIP from a different branch. Always check that you've stashed *something specific* before popping in a script.
 
 ```bash
 HARNESS=plugins/note_detect/tools/harness.js
-git stash
+STASH_MSG="harness-before-$$"
+git stash push -m "$STASH_MSG" || true
+# Bail out cleanly if nothing was stashed — running the "before" against
+# the same code as "after" would just produce identical numbers.
+git stash list | grep -q "$STASH_MSG" || { echo "no detector changes to stash — try again with edits in place"; exit 1; }
 node $HARNESS --audio <wav> --chart <json> --out /tmp/before.json
-git stash pop
+git stash pop "$(git stash list | grep "$STASH_MSG" | head -1 | cut -d: -f1)"
 node $HARNESS --audio <wav> --chart <json> --out /tmp/after.json
 node -e "
 const fs = require('fs');

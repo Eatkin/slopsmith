@@ -18,7 +18,7 @@ double-stops, and long low-E holds that stress YIN's accumulator at
 | A. Open strings (slow walk) | Mono detection on each open string, low → high → low |
 | B. 5th-fret (slow walk) | Fretted-note detection across the 4 strings |
 | C. Sustained notes | 3 × 4-second held roots |
-| D. Octave walks | Root ↔ octave alternation on adjacent strings |
+| D. Octave walks | Root ↔ octave alternation, 2 strings + 2 frets up |
 | E. Walking bassline | A minor pentatonic ascending + descending |
 | F. Root + fifth pattern | Classic rock bass pattern (8 events) |
 | G. Double-stops | 2-string voicings — the chord-scorer test for bass |
