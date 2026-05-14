@@ -323,6 +323,18 @@ def build(out_dir: Path):
         notes_all.extend(ns)
         if isinstance(ch_or_tuple, tuple):
             cs, tmpls = ch_or_tuple
+            # Rebase section-local chord template ids onto the global
+            # `templates_all` list. Each exercise emits its chords
+            # with `tmpl_id` numbered from 0 within the exercise; if
+            # we naively appended both chords and templates without
+            # offsetting, later sections' chords would silently
+            # reference earlier sections' templates (e.g. an open
+            # chord pointing at a power-chord shape). Apply the
+            # offset to each chord's `id` field before extending the
+            # global lists.
+            offset = len(templates_all)
+            for c in cs:
+                c['id'] = c.get('id', 0) + offset
             chords_all.extend(cs)
             templates_all.extend(tmpls)
         else:
@@ -388,6 +400,15 @@ def build(out_dir: Path):
     # ── Write files ──
     out_dir = Path(out_dir)
     if out_dir.exists():
+        # Defensive — see v1 builder. Only rmtree something that looks
+        # like a sloppak so a typo on the CLI doesn't nuke an unrelated
+        # directory.
+        if not (out_dir.suffix == '.sloppak'
+                or (out_dir / 'manifest.yaml').exists()):
+            raise RuntimeError(
+                f"refusing to rmtree {out_dir!r}: does not look like a sloppak "
+                f"(no .sloppak suffix, no manifest.yaml)."
+            )
         shutil.rmtree(out_dir)
     out_dir.mkdir(parents=True)
     (out_dir / 'arrangements').mkdir()
@@ -440,6 +461,7 @@ def _build_zip(src_dir: Path):
                 info = zipfile.ZipInfo(filename=rel, date_time=(1980, 1, 1, 0, 0, 0))
                 info.compress_type = zipfile.ZIP_DEFLATED
                 info.external_attr = (0o644 & 0xFFFF) << 16
+                info.create_system = 3   # POSIX — see v1 builder for why
                 zf.writestr(info, p.read_bytes())
 
 

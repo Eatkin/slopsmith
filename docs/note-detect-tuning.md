@@ -22,8 +22,8 @@ The distributable sloppak ships in-tree at [docs/benchmarks/note_detect_v1/note_
 | C. 12th-fret octaves | sparse single notes | high-frequency YIN behaviour |
 | D. Sustained notes | long-hold single notes | sustain matching / pure-miss vs detected |
 | E. Hammer / pull | legato pairs | technique-flag handling, attack ambiguity |
-| F. Power chords | 5–6 chord events | 2-string chord scorer |
-| G. Open chords | 5–6 chord events | dense chord scorer (5+ strings ringing) |
+| F. Power chords | 8 chord events | 2-string chord scorer |
+| G. Open chords | 8 chord events | dense chord scorer (5+ strings ringing) |
 | H. Bends | bend pairs | pitch-tolerance edge behaviour |
 
 Every chart note has `sus > 0` — so anything you tune against this benchmark exercises the sustain path, not staccato detection. (If we add a staccato section later, the cleanest split is by section name; don't categorize by `sus` value on the event log — see the "Common pitfalls" section.)
@@ -45,7 +45,7 @@ The typical cycle for one tuning hypothesis:
 2. **Arm a recording** from the gear popover next to the Detect button on the player. Arm before pressing Play.
 3. **Play through the benchmark** (or any song) at **1.0× playback speed**. Half-speed playback breaks audio↔chart alignment and produces all-miss garbage — see Pitfalls.
 4. **Auto-save fires on song end.** The WAV lands in `static/note_detect_recordings/note_detect_<slug>_<timestamp>.wav` (bind-mounted, so it's reachable from the host without a copy step).
-5. **Run the headless harness** with a known config:
+5. **Run the headless harness** with a known config. Paths below assume the note_detect plugin is cloned into `plugins/note_detect/` (see the slopsmith README for the plugin-install flow — note_detect ships as a separate repo):
     ```bash
     node plugins/note_detect/tools/harness.js \
         --audio static/note_detect_recordings/note_detect_<…>.wav \
@@ -204,8 +204,11 @@ Find the note's `t` in the chart, then grep the event log for entries near that 
 
 ## Reference
 
-- Plugin source: [plugins/note_detect/screen.js](../plugins/note_detect/screen.js) — `matchNotes`, `checkMisses`, `_diagTimingErrors` / `_diagTimingErrorsHits`, `getDiagnostic`.
-- Routes: [plugins/note_detect/routes.py](../plugins/note_detect/routes.py) — the `/api/plugins/note_detect/recording` endpoint that writes recordings to disk.
-- Harness: [plugins/note_detect/tools/harness.js](../plugins/note_detect/tools/harness.js).
+The Note Detection plugin lives in its own repository — these links go to the canonical source at github.com. If you've cloned the plugin into a local `plugins/note_detect/` next to this repo, the same files are at the equivalent path on disk.
+
+- Plugin source: [`screen.js`](https://github.com/byrongamatos/slopsmith-plugin-notedetect/blob/main/screen.js) — `matchNotes`, `checkMisses`, `_diagTimingErrors` / `_diagTimingErrorsHits`, `getDiagnostic`.
+- Routes: [`routes.py`](https://github.com/byrongamatos/slopsmith-plugin-notedetect/blob/main/routes.py) — the `/api/plugins/note_detect/recording` and `/api/plugins/note_detect/live-judgment` endpoints.
+- Harness: [`tools/harness.js`](https://github.com/byrongamatos/slopsmith-plugin-notedetect/blob/main/tools/harness.js).
+- Regression driver: [`tools/regression.js`](https://github.com/byrongamatos/slopsmith-plugin-notedetect/blob/main/tools/regression.js).
 - Benchmark builder: [docs/benchmarks/note_detect_v1/build_benchmark.py](benchmarks/note_detect_v1/build_benchmark.py).
-- Settings UI: [plugins/note_detect/settings.html](../plugins/note_detect/settings.html) — A/V auto-calibrate panel, tuning-mode toggle, diagnostic block.
+- Settings UI: [`settings.html`](https://github.com/byrongamatos/slopsmith-plugin-notedetect/blob/main/settings.html) — A/V auto-calibrate panel, tuning-mode toggle, diagnostic block.

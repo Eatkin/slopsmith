@@ -290,7 +290,12 @@ def exercise_open_chords(t0):
     pattern = list(range(4)) + list(range(4))
     for slot, idx in enumerate(pattern):
         name, sf = voicings[idx]
-        tmpl_id = idx + 4   # avoid colliding with power-chord template ids
+        # Local-zero-based template id. The driver in `build()` rebases
+        # these onto the global `templates_all` index before emitting
+        # the arrangement, so we don't need to pre-offset here — and
+        # in fact mustn't, since double-offsetting would point at
+        # template ids past the end of the list.
+        tmpl_id = idx
         if slot < len(voicings):
             frets = [-1] * 6
             for (s, f) in sf:
@@ -355,6 +360,15 @@ def build(out_dir: Path):
         notes_all.extend(ns)
         if isinstance(ch_or_tuple, tuple):
             cs, tmpls = ch_or_tuple
+            # Rebase section-local chord template ids onto the global
+            # `templates_all` list — see v2 builder for the full
+            # explanation. Multiple chord exercises in this benchmark
+            # (power, open) each use ids 0..N locally; without
+            # offsetting, open-chord events would silently point at
+            # power-chord templates.
+            offset = len(templates_all)
+            for c in cs:
+                c['id'] = c.get('id', 0) + offset
             chords_all.extend(cs)
             templates_all.extend(tmpls)
         else:
@@ -424,6 +438,18 @@ def build(out_dir: Path):
     # ── Write files ──
     out_dir = Path(out_dir)
     if out_dir.exists():
+        # Defensive: only blow away a directory that LOOKS like a
+        # sloppak (has a manifest.yaml at its root, or matches the
+        # `.sloppak` suffix this builder generates). A user who
+        # passes e.g. `python build_benchmark.py /tmp` by accident
+        # otherwise loses `/tmp` to a recursive delete.
+        if not (out_dir.suffix == '.sloppak'
+                or (out_dir / 'manifest.yaml').exists()):
+            raise RuntimeError(
+                f"refusing to rmtree {out_dir!r}: does not look like a sloppak "
+                f"(no .sloppak suffix, no manifest.yaml). Pass a path ending in "
+                f".sloppak or pointing at an existing sloppak directory."
+            )
         shutil.rmtree(out_dir)
     out_dir.mkdir(parents=True)
     (out_dir / 'arrangements').mkdir()
@@ -508,6 +534,13 @@ def _build_zip(src_dir: Path):
                 # external attrs on POSIX. Avoids "executable" / weird
                 # permission bits leaking from the host filesystem.
                 info.external_attr = (0o644 & 0xFFFF) << 16
+                # Force POSIX (3) for the create-system byte so the
+                # zip's central-directory metadata doesn't drift when
+                # the same builder runs on Windows vs Linux. Python's
+                # default is host-dependent (3 on POSIX, 0 on Windows)
+                # and was the last source of zip-level non-determinism
+                # after the date_time + external_attr fixes.
+                info.create_system = 3
                 zf.writestr(info, p.read_bytes())
 
 

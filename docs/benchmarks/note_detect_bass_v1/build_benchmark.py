@@ -311,6 +311,15 @@ def build(out_dir: Path):
         notes_all.extend(ns)
         if isinstance(ch_or_tuple, tuple):
             cs, tmpls = ch_or_tuple
+            # Rebase section-local chord template ids — see v1/v2
+            # builders for the full explanation. Bass v1 only has one
+            # chord exercise today (double-stops), but applying the
+            # same offset pattern future-proofs the driver against the
+            # day someone adds a second chord exercise that also uses
+            # local-zero-based ids.
+            offset = len(templates_all)
+            for c in cs:
+                c['id'] = c.get('id', 0) + offset
             chords_all.extend(cs)
             templates_all.extend(tmpls)
         else:
@@ -373,6 +382,15 @@ def build(out_dir: Path):
 
     out_dir = Path(out_dir)
     if out_dir.exists():
+        # Defensive — see v1 builder. Only rmtree something that looks
+        # like a sloppak so a typo on the CLI doesn't nuke an unrelated
+        # directory.
+        if not (out_dir.suffix == '.sloppak'
+                or (out_dir / 'manifest.yaml').exists()):
+            raise RuntimeError(
+                f"refusing to rmtree {out_dir!r}: does not look like a sloppak "
+                f"(no .sloppak suffix, no manifest.yaml)."
+            )
         shutil.rmtree(out_dir)
     out_dir.mkdir(parents=True)
     (out_dir / 'arrangements').mkdir()
@@ -424,6 +442,7 @@ def _build_zip(src_dir: Path):
                 info = zipfile.ZipInfo(filename=rel, date_time=(1980, 1, 1, 0, 0, 0))
                 info.compress_type = zipfile.ZIP_DEFLATED
                 info.external_attr = (0o644 & 0xFFFF) << 16
+                info.create_system = 3   # POSIX — see v1 builder for why
                 zf.writestr(info, p.read_bytes())
 
 
