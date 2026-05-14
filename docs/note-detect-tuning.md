@@ -123,7 +123,7 @@ When tuning mode is on, the plugin POSTs each judgment to `POST /api/plugins/not
 
 The file is human-readable and updates while the song plays. Tail it with `Get-Content -Wait` on Windows or `tail -f` on macOS/Linux:
 
-```
+```jsonl
 {"t":5.333,"s":0,"f":0,"hit":true,"ts":"OK","te":12,"pe":3,"cnf":0.94}
 {"t":6.000,"s":1,"f":0,"hit":false,"ts":"EARLY","te":-180,"cnf":0.71}
 {"t":6.667,"s":2,"f":0,"hit":true,"ts":"OK","te":-20,"pe":8}
