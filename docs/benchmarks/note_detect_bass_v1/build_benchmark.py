@@ -260,10 +260,14 @@ def exercise_double_stops(t0):
     strums = 8
     chords_out = []
     sus = SECONDS_PER_BEAT * 1.6
+    # Sloppak wire spec keeps chord-template fingers/frets in six-slot
+    # arrays even for bass (docs/sloppak-spec.md §chord-template), so we
+    # pad the unused two slots with -1; the chord notes themselves stay
+    # on strings 0–1.
     template = {
         'name': 'E5 (bass)', 'displayName': 'E5', 'arp': False,
-        'fingers': [-1] * N_STRINGS,
-        'frets': [0, 2, -1, -1],
+        'fingers': [-1, -1, -1, -1, -1, -1],
+        'frets':   [ 0,  2, -1, -1, -1, -1],
     }
     for i in range(strums):
         chord_notes = [chord_note(s, f, sus=sus) for (s, f) in voicing]
