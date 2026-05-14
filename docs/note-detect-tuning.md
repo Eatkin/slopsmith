@@ -28,9 +28,10 @@ The distributable sloppak ships in-tree at [docs/benchmarks/note_detect_v1/note_
 
 Every chart note has `sus > 0` — so anything you tune against this benchmark exercises the sustain path, not staccato detection. (If we add a staccato section later, the cleanest split is by section name; don't categorize by `sus` value on the event log — see the "Common pitfalls" section.)
 
-To rebuild after edits to the exercise list, follow the docstring at the top of `build_benchmark.py`. The script writes both an unzipped directory (`.sloppak/`) and a zipped archive (`.sloppak.zip`). The slopsmith library scanner (`lib/sloppak.py::is_sloppak()`) matches on the `.sloppak` suffix, **not** on `.sloppak.zip` — the directory form is usable as-is, but the zip output needs its suffix swapped before it'll be discovered. After regenerating, copy the zip output to the tracked path with the `.sloppak` suffix so it stays a drop-in install:
+To rebuild after edits to the exercise list, follow the docstring at the top of `build_benchmark.py`. The script writes both an unzipped directory (`.sloppak/`) and a zipped archive (`.sloppak.zip`). The slopsmith library scanner (`lib/sloppak.py::is_sloppak()`) matches on the `.sloppak` suffix, **not** on `.sloppak.zip` — the directory form is usable as-is, but the zip output needs its suffix swapped before it'll be discovered. After regenerating, copy the zip output to the tracked path with the `.sloppak` suffix so it stays a drop-in install. Run from the slopsmith repo root so the relative paths resolve:
 
 ```bash
+# From the slopsmith repo root.
 cp static/sloppak_cache/note_detect_benchmark_v1.sloppak.zip \
    docs/benchmarks/note_detect_v1/note_detect_benchmark_v1.sloppak
 ```
