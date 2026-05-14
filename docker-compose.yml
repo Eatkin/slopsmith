@@ -5,7 +5,7 @@ services:
       - "8000:8000"
     volumes:
       # Mount your Rocksmith DLC folder (adjust path for your system)
-      - ${DLC_PATH:-~/.local/share/Steam/steamapps/common/Rocksmith2014/dlc}:/dlc
+      - /mnt/nas/Rocksmith/cdlc/:/dlc
       # Persistent config and cache
       - rocksmith-config:/config
       # Mount source for live reload during development
