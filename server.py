@@ -512,6 +512,7 @@ class MetadataDB:
             # '2005' rather than alphabetic.
             "year": "(year = '') ASC, CAST(year AS INTEGER) ASC",
             "year-desc": "(year = '') ASC, CAST(year AS INTEGER) DESC",
+            "random": "RANDOM() ASC",
         }
         order = sort_map.get(sort, "artist COLLATE NOCASE")
         # Legacy `dir=desc` toggle: only safe to append on simple sort
