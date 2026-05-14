@@ -5,3 +5,9 @@
 pythonpath = [".", "lib"]
 testpaths = ["tests"]
 addopts = "-v --tb=short"
+
+[dependency-groups]
+dev = [
+    "pillow>=12.2.0",
+    "pycryptodome>=3.23.0",
+]
